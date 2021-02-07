@@ -1,5 +1,7 @@
 #include <WS2812FX.h>
 #include <stdint.h>
+#define ENCODER_OPTIMIZE_INTERRUPTS
+#include <Encoder.h>
 
 #define LED_COUNT 62
 
@@ -22,6 +24,10 @@
 //   NEO_RGBW    Pixels are wired for RGBW bitstream (NeoPixel RGBW products)
 WS2812FX ws2812fx = WS2812FX(LED_COUNT, LED_PIN, NEO_RGB + NEO_KHZ800);
 
+Encoder rotary_encoder(ENC_A_PIN,ENC_B_PIN);
+
+long prev_enc, enc_read;
+
 int brghtns = 120;
 int modeIndex = 0;
 int prev_A;
@@ -37,15 +43,14 @@ uint32_t prev_tick =0;
 int BtnPushedTime = 0;
 
 void setup() {
-  pinMode(ENC_A_PIN, INPUT_PULLUP);
-  pinMode(ENC_B_PIN, INPUT_PULLUP);
   pinMode(ENC_BTN_PIN, INPUT_PULLUP);
   pinMode(GND_OUT_PIN, OUTPUT);
 
-  attachInterrupt(ENC_A_PIN, encoder_handler, RISING);
   attachInterrupt(ENC_BTN_PIN, btn_handler, RISING);
 
   digitalWrite(GND_OUT_PIN, LOW);
+
+  prev_enc = rotary_encoder.read();
 
   myTime=millis();
 
@@ -67,50 +72,48 @@ void loop() {
   else{
     tick++;
   }
-  if(change){
-    ws2812fx.setBrightness(brghtns);
-    ws2812fx.setMode(list [modeIndex]);
-    ws2812fx.setSpeed(light_speed);
-    change = 0;
+
+  enc_read = rotary_encoder.read();
+  if(enc_read!=prev_enc){
+    if(enc_read<prev_enc){
+      encoder_handler_up();
+    }
+    else{
+      encoder_handler_down();
+    }
+    prev_enc=enc_read;
   }
   
   delay(20);
 }
 
-void encoder_handler(void){
-  // If A is different than the B then
-  int b_pulse = digitalRead(ENC_B_PIN);
-  // the encoder is rotating CCW
-  if(millis() - myTime > 5){
-    if (b_pulse == 0) {
-      switch(btn_mode){
-      case 0:
-        dimUp();
-        break;
-      case 1:
-        changeModeUp();
-        break;
-      case 2:
-        changeSpeedUp();
-        break;
-      }
-    } else {
-      // Encoder is rotating CW so increment
-      switch(btn_mode){
-      case 0:
-        dimDown();
-        break;
-      case 1:
-        changeModeDown();
-        break;
-      case 2:
-        changeSpeedDown();
-        break;
-      }
-    }
+void encoder_handler_up(void){
+  switch(btn_mode){
+  case 0:
+    dimUp();
+    break;
+  case 1:
+    changeModeUp();
+    break;
+  case 2:
+    changeSpeedUp();
+    break;
   }
-  myTime=millis();
-  change = 1;
+} 
+
+
+void encoder_handler_down(void){
+  switch(btn_mode){
+  case 0:
+    dimDown();
+    break;
+  case 1:
+    changeModeDown();
+    break;
+  case 2:
+    changeSpeedDown();
+    break;
+  }
 }
 
 void btn_handler(void){
@@ -130,6 +133,7 @@ void dimUp(){
   if (brghtns >= 255) {
     brghtns = 255;
   }
+  ws2812fx.setBrightness(brghtns);
 }
 
 void dimDown(){
@@ -137,11 +141,14 @@ void dimDown(){
   if (brghtns  <= 0) {
     brghtns = 0;
   }
+  ws2812fx.setBrightness(brghtns);
 }
 
 void changeModeUp(){
   modeIndex++;
   if ( modeIndex >= NR_OF_MODES ) modeIndex = 0;
+  ws2812fx.setColor(0xFFFFFF);
+  ws2812fx.setMode(list [modeIndex]);
 }
 
 void changeModeDown(){
@@ -151,6 +158,8 @@ void changeModeDown(){
   else{
     modeIndex--;
   }
+  ws2812fx.setColor(0xFFFFFF);
+  ws2812fx.setMode(list [modeIndex]);
 }
 
 void changeSpeedUp(){
@@ -160,11 +169,13 @@ void changeSpeedUp(){
   else{
     light_speed = light_speed -100;
   }
+  ws2812fx.setSpeed(light_speed);
 }
 
 void changeSpeedDown(){
     light_speed = light_speed + 100;
-  if (light_speed > 4000){
-    light_speed = 4000;
+  if (light_speed > 6000){
+    light_speed = 6000;
   }
+  ws2812fx.setSpeed(light_speed);
 }
